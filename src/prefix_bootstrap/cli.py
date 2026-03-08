@@ -6,7 +6,8 @@ Typer-based command-line interface.
 
 Commands
 --------
-run         Full bootstrap (stages 1-3, or a subset with ``--stages``).
+tui         Launch the interactive Textual TUI (like original bootstrap_interactive).
+run         Full non-interactive bootstrap (stages 1-3, or a subset).
 download    Download tarballs only (no building).
 show-deps   Print the dependency tree and exit.
 resolve     Query GNU mirrors for the latest package versions.
@@ -14,7 +15,10 @@ version     Print the tool version and exit.
 
 Examples::
 
-    # Full bootstrap to /usr/local/gentoo
+    # Launch the interactive TUI (recommended — matches original's interactive mode)
+    prefix-bootstrap tui
+
+    # Full non-interactive bootstrap to /usr/local/gentoo
     prefix-bootstrap run --prefix /usr/local/gentoo
 
     # Only stages 1 and 2, verbose
@@ -47,7 +51,7 @@ from prefix_bootstrap.__version__ import __version__
 from prefix_bootstrap.config import SUPPORTED_ARCH, BootstrapConfig
 from prefix_bootstrap.graph import dependency_summary
 from prefix_bootstrap.log import configure_logging
-from prefix_bootstrap.packages.definitions import STAGE_PACKAGES
+from prefix_bootstrap.packages.definitions import GNU_PROJECTS, STAGE_PACKAGES
 
 log = structlog.get_logger(__name__)
 console = Console()
@@ -56,6 +60,8 @@ app = typer.Typer(
     name="prefix-bootstrap",
     help=(
         "Modular Gentoo Prefix bootstrap for Linux aarch64 (arm64).  "
+        "Run 'prefix-bootstrap tui' for the interactive experience, or "
+        "'prefix-bootstrap run --prefix <path>' for non-interactive use.  "
         "See https://wiki.gentoo.org/wiki/Prefix/Bootstrap for background."
     ),
     add_completion=False,
@@ -137,6 +143,20 @@ def _check_platform() -> None:
 
 
 @app.command()
+def tui() -> None:
+    """Launch the interactive Gentoo Prefix bootstrap TUI.
+
+    This is the recommended way to run the bootstrap — it replicates the
+    original bootstrap-prefix.sh interactive mode with a full-screen
+    Textual terminal UI, ASCII art banner, environment checks, and live
+    build progress.  :D
+    """
+    from prefix_bootstrap.tui import run_tui
+
+    run_tui()
+
+
+@app.command()
 def run(
     prefix: _PrefixOpt = Path("/usr/local/gentoo"),
     work_dir: _WorkDirOpt = None,
@@ -146,11 +166,15 @@ def run(
     stages: _StagesOpt = None,
     mirror: _MirrorOpt = "https://ftpmirror.gnu.org",
 ) -> None:
-    """Run the full Gentoo Prefix bootstrap (all stages, or a subset).
+    """Run the Gentoo Prefix bootstrap non-interactively (all stages, or a subset).
 
-    This command downloads, compiles, and installs every required package
-    in the correct dependency order.  It is safe to re-run — completed
-    packages are detected via stamp files and skipped. :)
+    Downloads, compiles, and installs every required package in the correct
+    dependency order, matching the original script's bootstrap_stage1/2/3
+    function flow.  It is safe to re-run — completed packages are detected
+    via stamp files and skipped.  :)
+
+    For the interactive experience with the ASCII art banner, use
+    ``prefix-bootstrap tui`` instead.
     """
     _check_platform()
     cfg = _make_config(prefix, work_dir, log_level, json_logs, skip_verify, stages, mirror)
@@ -160,9 +184,17 @@ def run(
         f"prefix=[green]{prefix}[/green]  stages={cfg.stages}  :D"
     )
 
-    from prefix_bootstrap.stages import stage1, stage2, stage3
+    from prefix_bootstrap.bootstrap import (
+        bootstrap_stage1,
+        bootstrap_stage2,
+        bootstrap_stage3,
+    )
 
-    stage_runners = {1: stage1.run, 2: stage2.run, 3: stage3.run}
+    stage_runners = {
+        1: bootstrap_stage1,
+        2: bootstrap_stage2,
+        3: bootstrap_stage3,
+    }
     for stage_num in cfg.stages:
         stage_runners[stage_num](cfg)
 
@@ -229,38 +261,22 @@ def resolve(
     """Query GNU mirrors and print the latest version of each GNU package.
 
     Requires internet access.  Non-GNU packages (openssl, curl, rsync,
-    pkg-config, xz, zlib, bzip2) are reported with their catalogue version.
+    pkg-config, xz, zlib, bzip2, libffi, Python) are reported with their
+    catalogue versions.
     """
     configure_logging(log_level, json_output=json_logs)
-
-    gnu_projects = [
-        "bash",
-        "coreutils",
-        "findutils",
-        "grep",
-        "sed",
-        "gawk",
-        "make",
-        "patch",
-        "tar",
-        "m4",
-        "autoconf",
-        "automake",
-        "libtool",
-        "binutils",
-    ]
 
     from prefix_bootstrap.packages.gnu import resolve_all_latest
 
     console.print("[bold]Resolving latest GNU package versions ...[/bold]")
-    results = asyncio.run(resolve_all_latest(gnu_projects, mirror=mirror))
+    results = asyncio.run(resolve_all_latest(GNU_PROJECTS, mirror=mirror))
 
     table = Table(title="Latest GNU Packages", show_header=True)
     table.add_column("Package", style="cyan")
     table.add_column("Version", style="green")
     table.add_column("URL")
 
-    for name in gnu_projects:
+    for name in GNU_PROJECTS:
         if name in results:
             url, ver = results[name]
             table.add_row(name, ver, url)

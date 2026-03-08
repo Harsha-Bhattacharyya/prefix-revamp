@@ -1,12 +1,13 @@
 # prefix-bootstrap
 
 A modular, Cython-backed Python re-implementation of the
-[Gentoo Prefix bootstrap script](https://wiki.gentoo.org/wiki/Prefix/Bootstrap),
+[Gentoo Prefix bootstrap script](https://gitweb.gentoo.org/repo/proj/prefix.git/plain/scripts/bootstrap-prefix.sh),
 targeting **Linux aarch64 (arm64)** with GNU utilities only.
 
 macOS, BSD, and non-aarch64 architectures have been intentionally removed.
-The tool uses modern Python libraries for every subsystem and enforces strict
-formatting, linting, and type-checking.
+The tool uses modern Python libraries for every subsystem, provides a full-screen
+interactive TUI that replicates the original script's `bootstrap_interactive()` function,
+and enforces strict formatting, linting, and type-checking.
 
 ---
 
@@ -17,6 +18,8 @@ formatting, linting, and type-checking.
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Running the Bootstrap](#running-the-bootstrap)
+  - [Interactive TUI (recommended)](#interactive-tui-recommended)
+  - [Non-interactive CLI](#non-interactive-cli)
 - [CLI Reference](#cli-reference)
 - [Development](#development)
   - [Setup](#setup)
@@ -33,6 +36,9 @@ formatting, linting, and type-checking.
 
 ## Features
 
+- **Interactive TUI** via `textual` — replicates the original script's
+  `bootstrap_interactive()` function with the Gentoo ASCII art banner,
+  conversational wizard, environment variable checks, and live build progress.
 - **Async downloads** via `aiohttp` with parallel fetching and rich progress bars.
 - **Dependency graph** managed by `networkx` — packages are always built in
   safe topological order.
@@ -48,13 +54,17 @@ formatting, linting, and type-checking.
 - **Build orchestration** via `plumbum` — subprocess calls are explicit,
   typed, and easy to test.
 - **Three-stage bootstrap** mirrors the original shell script's phasing:
-  - Stage 1: essential GNU userland (bash, coreutils, grep, sed, …)
-  - Stage 2: build toolchain (m4, autoconf, binutils, GCC, …)
+  - Stage 1: essential GNU userland (make, wget, sed, xz, bzip2, patch, m4,
+    bison, coreutils, findutils, tar, grep, gawk, bash, zlib, libffi, Python)
+  - Stage 2: build toolchain (autoconf, automake, libtool, pkg-config, binutils, GCC)
   - Stage 3: Portage prerequisites (openssl, curl, rsync)
 - **Idempotent** — stamp files prevent re-building packages that are already
   installed. Safe to re-run after a failure.
 - **GNU URL auto-resolution** — `prefix-bootstrap resolve` queries the
   configured GNU mirror and prints the latest version of every GNU package.
+- **Function naming aligned with original** — `bootstrap_gnu()`,
+  `bootstrap_simple()`, `bootstrap_bash()`, `einfo()`, `eerror()`, `efetch()`,
+  `econf()`, `emake()` match the original shell script's function names.
 
 ---
 
@@ -124,6 +134,29 @@ If Cython is not installed the pure-Python fallback is used automatically.
 
 ## Running the Bootstrap
 
+### Interactive TUI (recommended)
+
+Launch the full-screen interactive TUI — this replicates the experience of the
+original `bootstrap_interactive()` function, with the Gentoo ASCII art banner,
+conversational wizard, and live build progress:
+
+```bash
+# Launch the TUI (recommended — same experience as original bootstrap_interactive)
+prefix-bootstrap tui
+
+# Or equivalently (TUI launches automatically with no subcommand)
+python -m prefix_bootstrap
+```
+
+The TUI will:
+1. Display the original Gentoo ASCII art banner :D
+2. Check that no problematic environment variables are set :/
+3. Ask for the prefix installation path
+4. Ask for the build work directory
+5. Run all three stages with live progress
+
+### Non-interactive CLI
+
 ```bash
 # Full three-stage bootstrap to /usr/local/gentoo
 prefix-bootstrap run --prefix /usr/local/gentoo
@@ -136,7 +169,7 @@ prefix-bootstrap run \
 # Only run stages 1 and 2
 prefix-bootstrap run --prefix /usr/local/gentoo --stages 1 --stages 2
 
-# Increase download parallelism and verbosity
+# Increase verbosity
 prefix-bootstrap run \
     --prefix /usr/local/gentoo \
     --log-level DEBUG
@@ -162,14 +195,15 @@ skipped. :)
 Usage: prefix-bootstrap [OPTIONS] COMMAND [ARGS]...
 
 Commands:
-  run        Run the full Gentoo Prefix bootstrap (all stages, or a subset).
+  tui        Launch the interactive Textual TUI (recommended).
+  run        Run the Gentoo Prefix bootstrap non-interactively.
   download   Download tarballs only (no building).
   show-deps  Print the dependency tree and exit.
   resolve    Query GNU mirrors and print latest package versions.
   version    Print the tool version and exit.
 ```
 
-### Common options (all commands except version / show-deps)
+### Common options (run / download commands)
 
 | Option | Default | Description |
 |---|---|---|
@@ -243,12 +277,37 @@ python setup.py build_ext --inplace
 ```
 prefix-revamp/
   src/
-    prefix_bootstrap/   Python package (see Architecture above)
-  tests/                pytest test suite
-  docs/                 Additional documentation
-  pyproject.toml        Build system, dependencies, tool config
-  setup.py              Cython extension build script
-  README.md             This file
+    prefix_bootstrap/
+      __init__.py             Package init
+      __main__.py             Entry point (launches TUI if no subcommand)
+      __version__.py          Version string
+      bootstrap.py            Core orchestration — einfo/eerror/efetch/econf/emake/
+                              bootstrap_gnu/bootstrap_simple/bootstrap_bash/... etc.
+                              (function names mirror the original shell script)
+      builder.py              configure/make/make-install wrapper via plumbum
+      cli.py                  Typer CLI (tui/run/download/show-deps/resolve/version)
+      config.py               Pydantic BootstrapConfig model
+      downloader.py           aiohttp async parallel downloader
+      extractor.py            tarfile extraction with path-safety
+      graph.py                networkx DAG + topological sort
+      hasher.py               SHA-256/MD5 verification (Cython or pure-Python)
+      log.py                  structlog configuration
+      tui.py                  Textual full-screen TUI (ASCII art + wizard + progress)
+      packages/
+        base.py               Package/Checksum pydantic models
+        definitions.py        Catalogue of all 29 packages (stages 1-3)
+        gnu.py                Async GNU mirror URL scraper
+      stages/
+        stage1.py             Stage 1 runner (wraps bootstrap.py)
+        stage2.py             Stage 2 runner
+        stage3.py             Stage 3 runner
+      _cython/
+        hasher.pyx            Cython SHA-256/MD5 extension
+  tests/                      pytest test suite (94 tests)
+  docs/                       Additional documentation
+  pyproject.toml              Build system, dependencies, tool config
+  setup.py                    Cython extension build script
+  README.md                   This file
   LICENSE
 ```
 
@@ -257,25 +316,27 @@ prefix-revamp/
 ## How It Works
 
 The bootstrap proceeds in three stages, each building on the previous one.
+The design closely follows the original `bootstrap-prefix.sh` function structure:
 
 ### Stage 1 — Essential GNU userland
 
-The system compiler builds a minimal set of GNU tools (bash, coreutils,
-findutils, grep, sed, gawk, make, patch, tar, xz, bzip2, zlib) into a
+Mirrors the original's `bootstrap_stage1()`.  The system compiler builds a
+minimal set of GNU tools (make, wget, sed, xz, bzip2, gzip, patch, m4, bison,
+coreutils, findutils, tar, grep, gawk, bash, zlib, libffi, Python) into a
 temporary tools directory (`$WORK_DIR/tools`).  These tools replace any
 possibly-ancient system tools for subsequent stages.
 
 ### Stage 2 — Build toolchain
 
-Using the Stage 1 tools, the build toolchain is assembled: m4, autoconf,
-automake, libtool, pkg-config, binutils, and GCC.  Outputs land in
-`$EPREFIX/usr`.
+Mirrors the original's `bootstrap_stage2()`.  Using the Stage 1 tools,
+the build toolchain is assembled: autoconf, automake, libtool, pkg-config,
+binutils, and GCC.
 
 ### Stage 3 — Portage prerequisites
 
-The networking stack needed to run `emerge` is built: openssl, curl, and
-rsync.  After this stage the prefix is ready for `emerge --sync` and a
-full Portage bootstrap.
+Mirrors the original's `bootstrap_stage3()`.  The networking stack needed to
+run `emerge` is built: openssl, curl, and rsync.  After this stage the prefix
+is ready for `emerge --sync` and a full Portage bootstrap.
 
 ---
 

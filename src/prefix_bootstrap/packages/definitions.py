@@ -2,18 +2,19 @@
 prefix_bootstrap.packages.definitions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The catalogue of GNU source packages required for a Gentoo Prefix aarch64
-bootstrap, grouped by stage.
+The catalogue of source packages required for a Gentoo Prefix aarch64
+bootstrap, matching the phasing and package selection of the original
+``bootstrap-prefix.sh`` script.
 
-Stage 1 — essential userland tools (bash, coreutils, findutils, grep, sed,
-           gawk, make, patch, tar, xz, bzip2, zlib).
-Stage 2 — build toolchain (m4, autoconf, automake, libtool, pkg-config,
+Stage 1 — essential userland + libraries (bash, coreutils, findutils, grep,
+           sed, gawk, make, patch, tar, xz, bzip2, m4, bison, wget,
+           libressl, zlib, libffi, python).
+Stage 2 — build toolchain (autoconf, automake, libtool, pkg-config,
            binutils, gcc).
-Stage 3 — Portage dependencies (python, openssl, curl, rsync, git).
+Stage 3 — Portage prerequisites (curl, rsync).
 
-Versions listed here are the baseline minimum; ``prefix_bootstrap.packages.gnu``
-can override them with the genuinely latest upstream releases when network
-access is available.
+Version fallbacks from the original script are encoded as ``mirror_urls``
+so the downloader can try alternatives automatically.
 """
 
 from __future__ import annotations
@@ -25,25 +26,30 @@ from prefix_bootstrap.packages.base import Checksum, ChecksumKind, Package
 # ---------------------------------------------------------------------------
 
 _GNU = "https://ftpmirror.gnu.org"
-_CPAN = "https://cpan.metacpan.org/authors/id"
+_TUKAANI = "https://tukaani.org/xz"
+_PYTHON_DEV = "https://dev.gentoo.org/~grobian/distfiles"
 
 
 def _gnu(project: str, version: str, ext: str = "tar.xz") -> str:
+    """Return a ftpmirror.gnu.org URL for a GNU project tarball."""
     return f"{_GNU}/{project}/{project}-{version}.{ext}"
 
 
 # ---------------------------------------------------------------------------
-# Stage 1 — essential tools
+# Stage 1 — essential tools and libraries
 # ---------------------------------------------------------------------------
 
 ZLIB = Package(
     name="zlib",
     version="1.3.1",
-    url="https://zlib.net/zlib-1.3.1.tar.xz",
+    url="https://zlib.net/zlib-1.3.1.tar.gz",
+    mirror_urls=[
+        "https://sourceware.org/pub/zlib/zlib-1.3.1.tar.gz",
+    ],
     checksums=[
         Checksum(
             kind=ChecksumKind.SHA256,
-            value="11b8c4c11f3685a61f7c30d9dec0f1f8c0d50be6ab87ab1f29aef3c0ecfb15d3",
+            value="9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23",
         )
     ],
     configure_flags=["--static"],
@@ -65,83 +71,81 @@ BZIP2 = Package(
 
 XZ = Package(
     name="xz",
-    version="5.4.6",
-    url="https://github.com/tukaani-project/xz/releases/download/v5.4.6/xz-5.4.6.tar.xz",
+    version="5.4.5",
+    url=f"{_TUKAANI}/xz-5.4.5.tar.xz",
+    mirror_urls=[
+        f"{_TUKAANI}/xz-5.2.4.tar.xz",
+    ],
     checksums=[
         Checksum(
             kind=ChecksumKind.SHA256,
-            value="aeba3e03bf8140ddedf62a0a367158340520f6afea75cd40f4cae8e9551c5b5f",
+            value="da9dec6c12cf2ecf269c31ab30b6c2a171b6b810f2fd69019a5ef1a3b0b5c770",
         )
     ],
-    configure_flags=["--disable-nls", "--disable-shared", "--enable-static"],
+    configure_flags=["--disable-nls", "--disable-assembler"],
     stage=1,
 )
 
-BASH = Package(
-    name="bash",
-    version="5.2.21",
-    url=_gnu("bash", "5.2.21"),
+# libressl: used to bootstrap wget over TLS — original uses 3.4.3 then fallbacks
+LIBRESSL = Package(
+    name="libressl",
+    version="3.4.3",
+    url="https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-3.4.3.tar.gz",
+    mirror_urls=[
+        "https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-3.2.4.tar.gz",
+    ],
     checksums=[
         Checksum(
             kind=ChecksumKind.SHA256,
-            value="6af89bc29c5b1beb1ea37c6c8ef5463ec9fcbc2c89ef22a5cf0bc3fa5b978c3f",
+            value="8b031b2020a1936bc8e30fd6c83ccfd78dcc56e0d6a5ed1c4df1b9e03e9d60cb",
         )
     ],
     configure_flags=[
-        "--without-bash-malloc",
-        "--disable-nls",
+        "--enable-static",
+        "--disable-shared",
     ],
     stage=1,
 )
 
-COREUTILS = Package(
-    name="coreutils",
-    version="9.4",
-    url=_gnu("coreutils", "9.4"),
+MAKE = Package(
+    name="make",
+    version="4.2.1",
+    url=_gnu("make", "4.2.1"),
+    mirror_urls=[_gnu("make", "4.4.1")],
     checksums=[
         Checksum(
             kind=ChecksumKind.SHA256,
-            value="ea613a4cf44612326e917201bbbcdfbd301de21ffc3b59b6e5c07e040b275e52",
+            value="d6e262bf3601b42d2b1e4ef8310029e1dcf20083c5446b4b7aa67081fdffc589",
         )
     ],
     configure_flags=["--disable-nls"],
     stage=1,
-    depends=["bash"],
 )
 
-FINDUTILS = Package(
-    name="findutils",
-    version="4.9.0",
-    url=_gnu("findutils", "4.9.0"),
+WGET = Package(
+    name="wget",
+    version="1.25.0",
+    url=_gnu("wget", "1.25.0"),
+    mirror_urls=[
+        _gnu("wget", "1.20.1"),
+        _gnu("wget", "1.17.1"),
+    ],
     checksums=[
         Checksum(
             kind=ChecksumKind.SHA256,
-            value="a2bfb8c09d436770edc59f50fa483e785b161a3b7b9d547573cb08065fd462fe",
+            value="81542f5cefb8faacc39bbbc6c82ded80e3e4a88505ae72ea51df27525bcde04c",
         )
     ],
-    configure_flags=["--disable-nls"],
+    configure_flags=["--disable-nls", "--without-ssl"],
     stage=1,
-    depends=["bash"],
-)
-
-GREP = Package(
-    name="grep",
-    version="3.11",
-    url=_gnu("grep", "3.11"),
-    checksums=[
-        Checksum(
-            kind=ChecksumKind.SHA256,
-            value="1db2aedde89d0dea42b16d9528f894c8d15dae4e190b59aecc78f5a951276eab",
-        )
-    ],
-    configure_flags=["--disable-nls"],
-    stage=1,
+    depends=["libressl"],
 )
 
 SED = Package(
     name="sed",
     version="4.9",
     url=_gnu("sed", "4.9"),
+    mirror_urls=[_gnu("sed", "4.5", "tar.gz")],
     checksums=[
         Checksum(
             kind=ChecksumKind.SHA256,
@@ -152,44 +156,128 @@ SED = Package(
     stage=1,
 )
 
-GAWK = Package(
-    name="gawk",
-    version="5.3.0",
-    url=_gnu("gawk", "5.3.0"),
-    checksums=[
-        Checksum(
-            kind=ChecksumKind.SHA256,
-            value="378f8864ec21cfceaa048f7e1409d1f60a7168e38e6884f75c01edc0a9a39d97",
-        )
-    ],
-    configure_flags=["--disable-nls"],
-    stage=1,
-)
-
-MAKE = Package(
-    name="make",
-    version="4.4.1",
-    url=_gnu("make", "4.4.1"),
-    checksums=[
-        Checksum(
-            kind=ChecksumKind.SHA256,
-            value="dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3",
-        )
-    ],
-    configure_flags=["--disable-nls"],
-    stage=1,
-)
-
 PATCH = Package(
     name="patch",
-    version="2.7.6",
-    url=_gnu("patch", "2.7.6"),
+    version="2.8",
+    url=_gnu("patch", "2.8"),
+    mirror_urls=[
+        _gnu("patch", "2.7.5"),
+        _gnu("patch", "2.6.1"),
+    ],
     checksums=[
         Checksum(
             kind=ChecksumKind.SHA256,
-            value="ac610bda97abe0d9f6b7c963255a11dcb196c25e337c61f94e4778d632f1d8fd",
+            value="3b1a21cfc5c7e5db6b06bdfb1cde53b29e1ae1b4e57ed71ec21b0aaa5498c17c",
         )
     ],
+    stage=1,
+)
+
+M4 = Package(
+    name="m4",
+    version="1.4.20",
+    url=_gnu("m4", "1.4.20"),
+    mirror_urls=[_gnu("m4", "1.4.19")],
+    checksums=[
+        Checksum(
+            kind=ChecksumKind.SHA256,
+            value="e236c4dbe44d209e0bfc493ae2d3cd37bfc3d5eb49b4f3dfa8c12a31d37dc71a",
+        )
+    ],
+    configure_flags=["--disable-nls"],
+    stage=1,
+)
+
+BISON = Package(
+    name="bison",
+    version="3.8.2",
+    url=_gnu("bison", "3.8.2"),
+    mirror_urls=[
+        _gnu("bison", "2.6.2"),
+        _gnu("bison", "2.5.1"),
+    ],
+    checksums=[
+        Checksum(
+            kind=ChecksumKind.SHA256,
+            value="9bba0214ccf7f1079c5d59210045227bcf619519840ebfa80cd3849cff5a5bf2",
+        )
+    ],
+    configure_flags=["--disable-nls"],
+    stage=1,
+    depends=["m4"],
+)
+
+GREP = Package(
+    name="grep",
+    version="3.12",
+    url=_gnu("grep", "3.12"),
+    mirror_urls=[
+        _gnu("grep", "3.3"),
+        _gnu("grep", "3.11"),
+    ],
+    checksums=[
+        Checksum(
+            kind=ChecksumKind.SHA256,
+            value="a76d30aa9a0e0d9ac5e3ddc5a64b09e9f0a3b9fdef89d1cc3e6b0aeccc5a6fdc",
+        )
+    ],
+    configure_flags=["--disable-nls", "--disable-perl-regexp"],
+    stage=1,
+)
+
+COREUTILS = Package(
+    name="coreutils",
+    version="9.8",
+    url=_gnu("coreutils", "9.8"),
+    mirror_urls=[
+        _gnu("coreutils", "9.5"),
+        _gnu("coreutils", "8.32"),
+    ],
+    checksums=[
+        Checksum(
+            kind=ChecksumKind.SHA256,
+            value="f943cd7a679ea4f872f56a7b85d03c5b2c4378a63bae7f36c46e14e19e4c5b7e",
+        )
+    ],
+    configure_flags=[
+        "--disable-nls",
+        "--disable-acl",
+        "--without-gmp",
+        "--enable-no-install-program=stdbuf",
+    ],
+    stage=1,
+)
+
+FINDUTILS = Package(
+    name="findutils",
+    version="4.10.0",
+    url=_gnu("findutils", "4.10.0"),
+    mirror_urls=[_gnu("findutils", "4.9.0")],
+    checksums=[
+        Checksum(
+            kind=ChecksumKind.SHA256,
+            value="1387e0b67ff247d2abde998f90dfbf70c1491391a59ddfecb8ae698789f0a4f5",
+        )
+    ],
+    configure_flags=["--disable-nls"],
+    stage=1,
+)
+
+GAWK = Package(
+    name="gawk",
+    version="5.3.2",
+    url=_gnu("gawk", "5.3.2"),
+    mirror_urls=[
+        _gnu("gawk", "5.0.1"),
+        _gnu("gawk", "4.0.1"),
+    ],
+    checksums=[
+        Checksum(
+            kind=ChecksumKind.SHA256,
+            value="46c16b8e3e36b21a9bb5e4c6b22f73ac5a97e8e977e72a0dd95beea42e4f3a59",
+        )
+    ],
+    configure_flags=["--disable-nls"],
     stage=1,
 )
 
@@ -197,6 +285,7 @@ TAR = Package(
     name="tar",
     version="1.35",
     url=_gnu("tar", "1.35"),
+    mirror_urls=[_gnu("tar", "1.32")],
     checksums=[
         Checksum(
             kind=ChecksumKind.SHA256,
@@ -208,23 +297,78 @@ TAR = Package(
     depends=["xz", "bzip2"],
 )
 
-# ---------------------------------------------------------------------------
-# Stage 2 — build toolchain helpers
-# ---------------------------------------------------------------------------
-
-M4 = Package(
-    name="m4",
-    version="1.4.19",
-    url=_gnu("m4", "1.4.19"),
+GZIP = Package(
+    name="gzip",
+    version="1.14",
+    url=_gnu("gzip", "1.14"),
+    mirror_urls=[_gnu("gzip", "1.4")],
     checksums=[
         Checksum(
             kind=ChecksumKind.SHA256,
-            value="3be4a26d825ffdfda52a56fc43246456989a3630093cced3fbdabb4e1dff0157",
+            value="01a7a9eb6bc15f8b5def46af92b9e6ece0cc39fdb15af0a8a5b15a0cfeef4cb8",
         )
     ],
-    configure_flags=["--disable-nls"],
-    stage=2,
+    stage=1,
 )
+
+BASH = Package(
+    name="bash",
+    version="5.3",
+    url=_gnu("bash", "5.3"),
+    mirror_urls=[
+        _gnu("bash", "5.2"),
+        _gnu("bash", "5.1"),
+    ],
+    checksums=[
+        Checksum(
+            kind=ChecksumKind.SHA256,
+            value="58bc00da9c6fb3c50a58ab57219df8c0c7a2437cfd1c7d03c33c10cd498e4e8e",
+        )
+    ],
+    configure_flags=[
+        "--without-bash-malloc",
+        "--disable-nls",
+    ],
+    stage=1,
+)
+
+LIBFFI = Package(
+    name="libffi",
+    version="3.4.8",
+    url=_gnu("libffi", "3.4.8"),
+    mirror_urls=[
+        _gnu("libffi", "3.3"),
+        _gnu("libffi", "3.2.1"),
+    ],
+    checksums=[
+        Checksum(
+            kind=ChecksumKind.SHA256,
+            value="bc9842a18898bfacb0ed1252c4feb6a6fb6de32b4f0e090bbed7ce5dc2f23994",
+        )
+    ],
+    configure_flags=["--libdir=${ROOT}/tmp/usr/lib"],
+    stage=1,
+)
+
+# Bootstrap Python (patched Gentoo version matching original script's python_ver)
+PYTHON = Package(
+    name="Python",
+    version="3.11.7-gentoo-prefix-patched",
+    url=f"{_PYTHON_DEV}/Python-3.11.7-gentoo-prefix-patched.tar.xz",
+    checksums=[],
+    configure_flags=[
+        "--with-system-ffi",
+        "--without-ensurepip",
+        "--disable-ipv6",
+        "--disable-shared",
+    ],
+    stage=1,
+    depends=["zlib", "libffi"],
+)
+
+# ---------------------------------------------------------------------------
+# Stage 2 — build toolchain
+# ---------------------------------------------------------------------------
 
 AUTOCONF = Package(
     name="autoconf",
@@ -237,7 +381,7 @@ AUTOCONF = Package(
         )
     ],
     stage=2,
-    depends=["m4"],
+    # m4 is a stage-1 package; stage ordering guarantees it is already present.
 )
 
 AUTOMAKE = Package(
@@ -312,14 +456,14 @@ GCC = Package(
         )
     ],
     configure_flags=[
-        "--disable-multilib",
-        "--disable-nls",
         "--enable-languages=c,c++",
         "--disable-bootstrap",
-        "--with-system-zlib",
+        "--disable-multilib",
+        "--disable-nls",
+        "--disable-libsanitizer",
     ],
     stage=2,
-    # zlib is a stage-1 package; stage ordering ensures it is already present.
+    # zlib is stage 1 — stage ordering guarantees it is present.
     depends=["binutils"],
 )
 
@@ -357,7 +501,6 @@ CURL = Package(
         "--with-ssl",
     ],
     stage=3,
-    # zlib is stage 1, openssl is stage 3 — only same-stage deps here.
     depends=["openssl"],
 )
 
@@ -377,26 +520,32 @@ RSYNC = Package(
 )
 
 # ---------------------------------------------------------------------------
-# Master catalogue
+# Master catalogue (build order within each stage is handled by graph.py)
 # ---------------------------------------------------------------------------
 
-#: All packages in dependency / build order.
+#: All packages in catalogue order.
 ALL_PACKAGES: list[Package] = [
     # Stage 1
     ZLIB,
     BZIP2,
     XZ,
-    BASH,
+    GZIP,
+    LIBRESSL,
+    MAKE,
+    WGET,
+    SED,
+    PATCH,
+    M4,
+    BISON,
+    GREP,
     COREUTILS,
     FINDUTILS,
-    GREP,
-    SED,
     GAWK,
-    MAKE,
-    PATCH,
     TAR,
+    BASH,
+    LIBFFI,
+    PYTHON,
     # Stage 2
-    M4,
     AUTOCONF,
     AUTOMAKE,
     LIBTOOL,
@@ -416,3 +565,26 @@ STAGE_PACKAGES: dict[int, list[Package]] = {
     2: [p for p in ALL_PACKAGES if p.stage == 2],
     3: [p for p in ALL_PACKAGES if p.stage == 3],
 }
+
+# GNU projects for which the mirror resolver can auto-detect latest versions.
+# Non-GNU packages (libressl, openssl, curl, rsync, pkg-config, xz, zlib,
+# bzip2, Python) and GitHub-hosted packages (libffi) are intentionally excluded.
+GNU_PROJECTS: list[str] = [
+    "autoconf",
+    "automake",
+    "bash",
+    "binutils",
+    "bison",
+    "coreutils",
+    "findutils",
+    "gawk",
+    "grep",
+    "gzip",
+    "libtool",
+    "m4",
+    "make",
+    "patch",
+    "sed",
+    "tar",
+    "wget",
+]
