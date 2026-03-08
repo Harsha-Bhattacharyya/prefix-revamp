@@ -1,0 +1,83 @@
+[build-system]
+requires = ["setuptools>=65", "wheel", "cython>=3.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prefix-bootstrap"
+version = "0.1.0"
+description = "Modular Gentoo Prefix bootstrap for Linux aarch64 (arm64)"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = [
+    "plumbum>=1.8",
+    "aiohttp>=3.9",
+    "rich>=13.7",
+    "networkx>=3.2",
+    "pydantic>=2.5",
+    "typer>=0.9",
+    "structlog>=24.1",
+]
+
+[project.scripts]
+prefix-bootstrap = "prefix_bootstrap.__main__:app"
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.3",
+    "black>=24.3",
+    "mypy>=1.9",
+    "pytest>=8.1",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
+    "types-setuptools",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "ANN", # flake8-annotations
+    "S",   # flake8-bandit
+    "PT",  # flake8-pytest-style
+]
+ignore = [
+    "S603",    # subprocess call - check for execution of untrusted input
+    "S607",    # starting a process with a partial executable path
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "ANN", "S108"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+exclude = ["src/prefix_bootstrap/_cython/"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "--cov=prefix_bootstrap --cov-report=term-missing -v"
+
+[tool.coverage.run]
+source = ["src/prefix_bootstrap"]
+omit = ["src/prefix_bootstrap/_cython/*"]
