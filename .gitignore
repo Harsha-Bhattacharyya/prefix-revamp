@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Cython compiled extensions
+*.so
+*.c
+src/prefix_bootstrap/_cython/*.c
+src/prefix_bootstrap/_cython/*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+*.coveragerc
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Linting
+.ruff_cache/
+
+# IDE / editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Bootstrap working directories (not source)
+bootstrap-work/
+distfiles/
+stamps/
+tools/
+
+# Distribution
+*.whl
+*.tar.gz
+MANIFEST
